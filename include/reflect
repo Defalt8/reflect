@@ -1,0 +1,35 @@
+#pragma once
+#ifndef REFLECT
+#define REFLECT
+
+#include <ds/tuple>
+
+namespace reflection {
+
+
+template <typename O, typename T>
+struct object_traits
+{
+	using object_t = O;
+	using tuple_t  = T;
+};
+
+template <class C, typename T>
+struct member_object_traits
+{
+	using class_t = C;
+	using tuple_t = T;
+};
+
+namespace traits {
+
+	template <class O> struct object;
+	template <class C> struct member_object;
+
+} // namespace traits
+
+
+} // namespace reflection
+
+
+#endif // REFLECT
