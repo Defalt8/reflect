@@ -1,0 +1,3 @@
+[submodule "dep/dspp"]
+	path = dep/dspp
+	url = https://github.com/defalt8/dspp
