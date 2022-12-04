@@ -137,13 +137,7 @@ access_member(Tup && refl_, C && object)
 }
 
 
-template <typename... Ts>
-static constexpr ds::Tuple<Ts...>
-make_tuple(Ts &&... objects)
-{
-	return { ds::forward<Ts>(objects)... };
-}
-
+using ds::make_tuple;
 
 } // namespace reflect
 

@@ -118,7 +118,7 @@ int main(int argc, char * argv[])
 {
 	// sst << WORKING_DIR << ds::endl;
 	// int argc = 3; 
-	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
+	// char const * argv[] = { "", WORKING_DIR"src/vec3f", WORKING_DIR"src/dm/vec2i" };
 	//------------------------------------------------
 	// get the arguments as the input source files
 	// read the source files into an array of strings
@@ -135,8 +135,9 @@ int main(int argc, char * argv[])
 			auto contents    = ds::stack<ds::string<>>(size_);
 			auto gen_path    = "./gen/reflections/"_dsstrv;
 			auto attributes  = attributes_t();
-			// step 0: validate or create gen_path
+			// step 0: recreate and validate gen_path
 			{
+				ds::sys::remove(gen_path);
 				auto type = ds::sys::get_type(gen_path);
 				if(type == ds::sys::type::unavailable)
 				{
@@ -326,7 +327,7 @@ int main(int argc, char * argv[])
 							}
 							else
 								member_object_tuples_sst << "\n\t\t, ";
-							member_object_tuples_sst << "reflect::member_object_t<" << ns_object_id << ">::tuple";
+							member_object_tuples_sst << "ds::clone(reflect::member_object_t<" << ns_object_id << ">::tuple)";
 						}
 						else 
 						{
@@ -337,8 +338,8 @@ int main(int argc, char * argv[])
 							}
 							else
 								object_tuples_sst << "\n\t\t, ";
-							object_tuples_sst << "reflect::object_t<decltype(" << ns_object_id << "),&";
-							object_tuples_sst << ns_object_id << ">::tuple";
+							object_tuples_sst << "ds::clone(reflect::object_t<decltype(" << ns_object_id << "),&";
+							object_tuples_sst << ns_object_id << ">::tuple)";
 						}
 					}
 				}
@@ -653,6 +654,17 @@ get_reflect_attributes(ds::string_view const & content)
 					namespaces.pop();
 					namespace_blocks.pop();
 				}
+			}
+			else if(ch == '/' && content[i + 1] == '/')
+			{
+				// skip till new-line
+				for(i = i + 2; i < content_size_ && content[i] != '\n'; ++i);
+			}
+			else if(ch == '/' && content[i + 1] == '*')
+			{
+				// skip till */
+				auto content_size_1 = content_size_ - 1;
+				for(i = i + 2; i < content_size_1 && !(content[i] == '*' && content[i+1] == '/'); ++i);
 			}
 		}
 	}
