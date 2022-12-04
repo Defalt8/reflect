@@ -48,6 +48,18 @@ R"~~(#pragma once
 
 ${HEADER_INCLUSIONS}
 
+namespace reflect {
+
+static constexpr auto objects = make_tuple(
+		${OBJECT_TUPLES}
+	);
+
+static constexpr auto member_objects = make_tuple(
+		${MEMBER_OBJECT_TUPLES}
+	);
+
+} // namespace reflect
+
 #endif // REFLECTIONS_ALL
 )~~";
 
@@ -88,7 +100,7 @@ namespace traits {
 	template <>
 	struct member_object<${NS_TYPE_ID}> : public reflect::member_object_traits<${NS_TYPE_ID}> 
 	{
-		static constexpr auto tuple = ds::make_tuple(
+		static constexpr auto tuple = make_tuple(
 			${MEMBER_DEF_TUPLES}
 		);
 	};
@@ -202,6 +214,10 @@ int main(int argc, char * argv[])
 				using content_t   = ds::string<>;
 				using header_t    = ds::tuple<path_t,content_t>;
 				auto headers = ds::stack<header_t>(attributes.size());
+				ds::string_stream<> object_tuples_sst(512);
+				ds::string_stream<> member_object_tuples_sst(512);
+				auto first_object        = true;
+				auto first_member_object = true;
 				for(auto & attr : attributes)
 				{
 					// generate substitution table
@@ -240,7 +256,7 @@ int main(int argc, char * argv[])
 						ns_object_id = sstream.view();
 						subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
 					}
-					// generate member definition tuples
+					// generate member/object definition tuples
 					{
 						if(member_object)
 						{
@@ -259,8 +275,9 @@ int main(int argc, char * argv[])
 										sstream << "  ";
 										first = false;
 									}
-									sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
+									sstream << "make_tuple(\"" << ns_object_id << "\"_dsstrv";
 									sstream << ", \"" << arg << "\"_dsstrv";
+									sstream << ", \"" << type_id << "\"_dsstrv";
 									sstream << ", &" << ns_object_id << "::" << arg << ")";
 								}
 								subs.push(substitution_t("MEMBER_DEF_TUPLES", sstream.view()));
@@ -271,7 +288,8 @@ int main(int argc, char * argv[])
 							if(function_id == "ref"_dsstrv)
 							{
 								ds::string_stream<> sstream(512);
-								sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
+								sstream << "make_tuple(\"" << ns_object_id << "\"_dsstrv";
+								sstream << ", \"" << type_id << "\"_dsstrv";
 								sstream << ", ds::ref(" << ns_object_id << "))";
 								subs.push(substitution_t("DEF_TUPLE", sstream.view()));
 							}
@@ -296,6 +314,32 @@ int main(int argc, char * argv[])
 							header_path = sstream.view();
 						}
 						headers.push(header_t(ds::move(header_path), ds::move(generated)));
+					}
+					// generate object and member_object tuples for header all
+					{
+						if(member_object)
+						{
+							if(first_member_object)
+							{
+								first_member_object = false;
+								member_object_tuples_sst << "  ";
+							}
+							else
+								member_object_tuples_sst << "\n\t\t, ";
+							member_object_tuples_sst << "reflect::member_object_t<" << ns_object_id << ">::tuple";
+						}
+						else 
+						{
+							if(first_object)
+							{
+								first_object = false;
+								object_tuples_sst << "  ";
+							}
+							else
+								object_tuples_sst << "\n\t\t, ";
+							object_tuples_sst << "reflect::object_t<decltype(" << ns_object_id << "),&";
+							object_tuples_sst << ns_object_id << ">::tuple";
+						}
 					}
 				}
 				// step 5.7: save reflection header files
@@ -350,7 +394,9 @@ int main(int argc, char * argv[])
 					// generate all including header
 					{
 						auto all_reflections_subs = substitutions_t({
-							substitution_t("HEADER_INCLUSIONS", all_reflections_sst.view())
+							  substitution_t("HEADER_INCLUSIONS", all_reflections_sst.view())
+							, substitution_t("OBJECT_TUPLES", object_tuples_sst.view())
+							, substitution_t("MEMBER_OBJECT_TUPLES", member_object_tuples_sst.view())
 						});
 						auto all_reflections_content = substitute_string(all_reflections_template, all_reflections_subs);
 						auto all_header_path = ds::string<>(gen_path, "all");

@@ -8,21 +8,43 @@ ds::string_stream<> sst(1024);
 
 int main()
 {
-	{
-		dm::vec2i vec {1,2};
-		auto & vec2i_tuple = reflect::member_object_t<dm::vec2i>::tuple;
-		{ auto & stup = vec2i_tuple.at<0>(); sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; }
-		{ auto & stup = vec2i_tuple.at<1>(); sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; }
-	}
+	
 	{
 		vec3f vec {1,2,3};
-		auto & vec3f_tuple = reflect::member_object_t<vec3f>::tuple;
-		{ auto & stup = vec3f_tuple.at<0>(); sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; }
-		{ auto & stup = vec3f_tuple.at<1>(); sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; }
-		{ auto & stup = vec3f_tuple.at<2>(); sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; }
+		auto & tuple_ = reflect::member_object_t<vec3f>::tuple;
+		{ 
+			tuple_.size(); // 3
+			auto & refl = tuple_.at<1>(); // reflection info of ::vec3f::y
+			sst << reflect::get_id(refl) << "::";
+			sst << reflect::get_member_id(refl) << " : ";
+			sst << reflect::get_type_id(refl) << " = ";
+			sst << vec.*reflect::get_member_object_ptr(refl) << " = ";
+			sst << reflect::access_member(refl, vec);
+			sst << ds::endl;
+		}
 	}
+    sst << ds::string<>(32, '-') << ds::endl;
 	{
-		auto & factor_tuple = reflect::object_t<decltype(dm::sd::factor),&dm::sd::factor>::tuple;
-		sst << factor_tuple.at<0>() << " " << factor_tuple.at<1>() << ds::endl;
+		reflect::objects.for_each([&](size_t i_, auto && refl)
+		{
+			sst << reflect::get_id(refl) << " : ";
+			sst << reflect::get_type_id(refl) << " = ";
+			sst << reflect::get_object(refl);
+			sst << ds::endl;
+		});
+	}
+	sst << ds::string<>(32, '-') << ds::endl;
+	{
+		reflect::member_objects.for_each([&](size_t i_, auto && tuple_)
+		{
+			tuple_.for_each([&](size_t i_, auto && refl)
+			{
+				sst << reflect::get_id(refl) << "::";
+				sst << reflect::get_member_id(refl) << " : ";
+				sst << reflect::get_type_id(refl);
+				sst << ds::endl;
+			});
+			sst << ds::string<>(32, '-') << ds::endl;
+		});
 	}
 }

@@ -28,11 +28,122 @@ namespace traits {
 
 } // namespace traits
 
-// use object_t<C,C*>::tuple
+// use as object_t<C,C*>::tuple
 template <class C, C * ptr_> using object_t = traits::object<C,ptr_>;
 
-// use member_object_t<C>::tuple
+// use as member_object_t<C>::tuple
 template <class C> using member_object_t = traits::member_object<C>;
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 3), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_id(Tup && refl_) 
+{
+	return refl_.template at<0>(); 
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 3), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_object_id(Tup && refl_) 
+{
+	return refl_.template at<0>(); 
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 3), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_type_id(Tup && refl_)   
+{
+	return refl_.template at<1>(); 
+}
+
+template <class Tup
+		, typename R = decltype(ds::decl<Tup>().template at<2>())
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 3), int> = 0
+	> 
+static constexpr R &
+get_object(Tup && refl_)
+{
+	return refl_.template at<2>(); 
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	>  
+static constexpr ds::string_view const & 
+get_id(Tup && refl_) 
+{
+	return refl_.template at<0>();
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_class_id(Tup && refl_)  
+{
+	return refl_.template at<0>();
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	>  
+static constexpr ds::string_view const & 
+get_member_id(Tup && refl_) 
+{
+	return refl_.template at<1>();
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_type_id(Tup && refl_)   
+{
+	return refl_.template at<2>();
+}
+
+template <class Tup
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	> 
+static constexpr ds::string_view const & 
+get_class_type_id(Tup && refl_)   
+{
+	return refl_.template at<2>();
+}
+
+template <class Tup
+		, typename R = decltype(ds::decl<Tup>().template at<3>())
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	> 
+static constexpr R
+get_member_object_ptr(Tup && refl_)
+{
+	return refl_.template at<3>(); 
+}
+
+template <class Tup, class C
+		, typename R = decltype(ds::decl<C>().*(ds::decl<Tup>().template at<3>()))
+		, ds::enable_if_t<(ds::remove_cvref_t<Tup>::size() == 4), int> = 0
+	> 
+static constexpr R &
+access_member(Tup && refl_, C && object)
+{
+	return object.*(refl_.template at<3>()); 
+}
+
+
+template <typename... Ts>
+static constexpr ds::Tuple<Ts...>
+make_tuple(Ts &&... objects)
+{
+	return { ds::forward<Ts>(objects)... };
+}
+
 
 } // namespace reflect
 
