@@ -34,8 +34,8 @@ int main(int argc, char * argv[])
 // int main()
 {
 	// sst << WORKING_DIR << ds::endl;
-	// int argc = 2; 
-	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f" };
+	// int argc = 3; 
+	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
 	//------------------------------------------------
 	// get the arguments as the input source files
 	// read the source files into an array of strings
@@ -136,11 +136,13 @@ int main(int argc, char * argv[])
 				}
 			}
 			// step 5: save reflection header files
-			{}
+			{
+			}
 		}
 		else 
 		{
-			sst << "reflect v0.1.0\n";
+			using reflect::version;
+			sst << "reflect v" << version.major << '.' << version.minor << '.' << version.patch << "\n";
 			sst << "usage:\n";
 			sst << "    reflect <src_0> [src_1]...\n";
 			sst << ds::flush;

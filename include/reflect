@@ -4,8 +4,9 @@
 
 #include <ds/tuple>
 
-namespace reflection {
+namespace reflect {
 
+static constexpr struct Version { int major, minor, patch; } version { 0, 5, 7 };
 
 template <typename O, typename T>
 struct object_traits
@@ -29,7 +30,7 @@ namespace traits {
 } // namespace traits
 
 
-} // namespace reflection
+} // namespace reflect
 
 
 #endif // REFLECT
