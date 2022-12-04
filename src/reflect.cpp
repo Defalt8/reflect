@@ -117,9 +117,8 @@ int main(int argc, char * argv[])
 					}
 				}
 			}
-			// step 4: generate reflection header files
+			// step 4: get the attributes
 			{
-				// get the attributes
 				for(size_t i = 0; i < size_; ++i)
 				{
 					auto attributes = get_reflect_attributes(contents[i]);
@@ -135,16 +134,22 @@ int main(int argc, char * argv[])
 					}
 				}
 			}
-			// step 5: save reflection header files
+			// step 4.9: free contents
+			{
+				contents.destroy();
+			}
+			// step 5: generate reflection header files
 			{
 			}
+			// step 6: save reflection header files
+			{}
 		}
 		else 
 		{
 			using reflect::version;
 			sst << "reflect v" << version.major << '.' << version.minor << '.' << version.patch << "\n";
-			sst << "usage:\n";
-			sst << "    reflect <src_0> [src_1]...\n";
+			sst << "usage: reflect <src_0> [src_1]...\n";
+			sst << "default output path is './gen/reflections'\n";
 			sst << ds::flush;
 		}
 	}
