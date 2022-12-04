@@ -8,6 +8,8 @@
 
 namespace reflector {
 
+static constexpr struct Version { int major, minor, patch; } version { 0, 10, 17 };
+
 using path_t      = ds::string<>;
 using content_t   = ds::string<>;
 using header_t    = ds::tuple<path_t,content_t>;

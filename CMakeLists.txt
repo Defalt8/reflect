@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 3.4 )
-project( Reflect VERSION 0.9.15 LANGUAGES CXX )
+project( Reflect VERSION 0.10.17 LANGUAGES CXX )
 
 if( MSVC )
 	set( CMAKE_CXX_FLAGS -wd5030 )

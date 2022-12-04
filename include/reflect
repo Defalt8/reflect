@@ -6,7 +6,7 @@
 
 namespace reflect {
 
-static constexpr struct Version { int major, minor, patch; } version { 0, 9, 15 };
+static constexpr struct Version { int major, minor, patch; } version { 0, 10, 17 };
 
 template <typename O, O *>
 struct object_traits
