@@ -11,12 +11,12 @@ C++ reflection using code generation.
 - Compiling with `-Wno-attributes` or a similar option is recommended if supported by the compiler.
 
 ```c++
-
 struct [[reflect::ref(x, y, z)]] vec3f
 {
 	int x, y, z;
 };
 
+static ds::fixed<5,int> [[reflect::ref()]] primes { 2, 3, 5, 7, 11 };
 ```
 
 ```sh
@@ -61,6 +61,7 @@ int main()
             sst << reflect::get_type_id(refl);
             sst << ds::endl;
         });
+        sst << ds::string<>(32, '-') << ds::endl;
     });
 }
 ```
@@ -72,4 +73,5 @@ output
 ::vec3f::x : struct
 ::vec3f::y : struct
 ::vec3f::z : struct
+--------------------------------
 ```

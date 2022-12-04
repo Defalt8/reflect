@@ -3,11 +3,16 @@
 #include "dm/sd/var"
 #include "vec3f"
 #include <reflections/all>
+#include <reflector>
 
 ds::string_stream<> sst(1024);
 
 int main()
 {
+	// {
+	// 	auto headers = reflector::generate(reflector::get_contents({{ WORKING_DIR"src/vec3f", WORKING_DIR"src/dm/vec2i" }}));
+	// 	reflector::export_to_file(headers, WORKING_DIR"./gen/reflections/");
+	// }
 	{
 		vec3f vec {1,2,3};
 		auto & tuple_ = reflect::member_object_t<vec3f>::tuple;

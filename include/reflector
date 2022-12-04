@@ -1,0 +1,22 @@
+#pragma once
+#ifndef REFLECTOR
+#define REFLECTOR
+
+#include <ds/common>
+#include <ds/stack>
+#include <ds/string>
+
+namespace reflector {
+
+using path_t      = ds::string<>;
+using content_t   = ds::string<>;
+using header_t    = ds::tuple<path_t,content_t>;
+
+extern ds::stack<header_t>     generate(ds::stack<ds::string<>> const & file_contents);
+extern bool                    export_to_file(ds::stack<header_t> const & headers, ds::string_view const & output_path = "./gen/reflections/");
+extern ds::string<>            get_content(ds::string_view const & file_path);
+extern ds::stack<ds::string<>> get_contents(ds::stack<ds::string_view> const & file_paths);
+
+} // namespace reflector
+
+#endif // REFLECTOR

@@ -6,9 +6,7 @@
 #include <ds/string>
 #include <ds/string_stream>
 #include <reflect>
-
-ds::string_stream<> sst(1024);
-ds::end_line endl_error(stderr);
+#include <reflector>
 
 // struct/class [[reflect::ref(member_0, member_1, ...)]] name;
 // type [[reflect::ref()]] name;
@@ -113,331 +111,99 @@ namespace traits {
 #endif // REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
 )~~";
 
-int main(int argc, char * argv[])
-// int main()
-{
-	// sst << WORKING_DIR << ds::endl;
-	// int argc = 3; 
-	// char const * argv[] = { "", WORKING_DIR"src/vec3f", WORKING_DIR"src/dm/vec2i" };
-	//------------------------------------------------
-	// get the arguments as the input source files
-	// read the source files into an array of strings
-	// find the sub-strings with the [[reflect::*]] attributes
-	// generate a reflection header/source-file
-	// ~~rewrite the source file ignoring those attributes~~
-	//------------------------------------------------
+namespace reflector {
 
-	ds_try {
-		if(argc > 1)
+ds::stack<ds::string<>>
+get_contents(ds::stack<ds::string_view> const & file_paths)
+{
+	auto contents = ds::stack<ds::string<>>(file_paths.size());
+	for(auto & file_path : file_paths)
+		contents.push(get_content(file_path));
+	return ds::move(contents);
+}
+
+ds::string<>
+get_content(ds::string_view const & file_path)
+{
+	ds::file ifile(file_path.begin(), "r");
+	if(ifile)
+	{
+		auto size_ = size_t(ifile.size());
+		auto content = ds::string<>(size_);
+		if(content.size() >= size_)
 		{
-			auto size_       = size_t(argc - 1);
-			auto input_files = ds::stack<ds::string<>>(size_);
-			auto contents    = ds::stack<ds::string<>>(size_);
-			auto gen_path    = "./gen/reflections/"_dsstrv;
-			auto attributes  = attributes_t();
-			// step 0: recreate and validate gen_path
+			size_t read_ = ifile.read(content.begin(), content.size());
+			return { ds::move(content), read_ };
+		}
+	}
+	return {};
+}
+
+bool
+export_to_file(ds::stack<header_t> const & headers, ds::string_view const & output_path_)
+{
+	if(output_path_.size() == 0)
+		return false;
+	// create output path
+	bool needs_suffix = output_path_[output_path_.size() - 1] != '\\' && output_path_[output_path_.size() - 1] != '/';
+	auto output_path = ds::string<>(output_path_, needs_suffix ? (output_path_.size() + 1) : output_path_.size());
+	{
+		if(needs_suffix)
+			output_path.at(output_path_.size()) = '/';
+		ds::sys::remove(output_path);
+		auto ret = ds::sys::mkdirs(output_path);
+		ds_throw_if(ret != ds::sys::smkdir::ok, ret);
+		ds_throw_if_alt(ret != ds::sys::smkdir::ok, return false);
+	}
+	for(auto & header : headers)
+	{
+		// export header files
+		{
+			auto const & header_file = header.at<0>();
+			auto         header_path = ds::string<>(output_path, header_file);
+			// create and validate the output path for the header 
 			{
-				ds::sys::remove(gen_path);
-				auto type = ds::sys::get_type(gen_path);
+				auto pindex = size_t(0);
+				for(size_t i = header_path.size() - 1; ; --i)
+				{
+					char ch = header_path[i];
+					if(ch == '/' || ch == '\\')
+					{
+						pindex = i;
+						break;
+					}
+					if(i == 0)
+						break;
+				}
+				auto header_dir = header_path.view(0, pindex);
+				auto type = ds::sys::get_type(header_dir);
 				if(type == ds::sys::type::unavailable)
 				{
-					auto ret = ds::sys::mkdirs(gen_path);
-					if(ret != ds::sys::smkdir::ok)
-					{
-						sst << "ERROR: failed to create gen_path '" << gen_path << "'!" << endl_error;
-						return -1;
-					}
+					auto ret = ds::sys::mkdirs(header_dir);
+					ds_throw_if(ret != ds::sys::smkdir::ok, ret);
+					ds_throw_if_alt(ret != ds::sys::smkdir::ok, return false);
 				}
 				else if(type != ds::sys::type::dir)
 				{
-					sst << "ERROR: gen_path '" << gen_path << "' is not a directory!" << endl_error;
-					return -1;
+					ds_throw(type);
+					ds_throw_alt(return false);
 				}
 			}
-			// step 1: input file paths
+			// create and write to hedaer file
 			{
-				for(int i = 1; i < argc; ++i)
-					input_files.push(argv[i]);
+				ds::file ofile(header_path.begin(), "w");
+				ds_throw_if(!ofile, ofile);
+				ds_throw_if_alt(!ofile, return false);
+				auto const & header_content = header.at<1>();
+				ofile.write(header_content.begin(), header_content.size());
 			}
-			// step 2: validate input files
-			{
-				for(auto const & input_file : input_files)
-				{
-					auto type = ds::sys::get_type(input_file);
-					if(type == ds::sys::type::unavailable)
-					{
-						sst << "ERROR: input file '" << input_file << "' not found!" << endl_error;
-						return -1;
-					}
-					else if(type != ds::sys::type::regular_file)
-					{
-						sst << "ERROR: input file '" << input_file << "' not a regular file!" << endl_error;
-						return -1;
-					}
-				}
-			}
-			// step 3: read input files
-			{
-				for(size_t i = 0; i < size_; ++i)
-				{
-					auto const & input_file = input_files[i];
-					ds::file ifile(input_file.begin(), "r");
-					if(!ifile)
-					{
-						sst << "ERROR: failed to open input file '" << input_file << "'!" << endl_error;
-						return -1;
-					}
-					auto * content = contents.push(ds::string<>(size_t(ifile.size())));
-					if(content == nullptr || content->size() != ifile.size())
-					{
-						sst << "ERROR: allocation failure!" << endl_error;
-						return -1;
-					}
-					ifile.read(content->begin(), content->size());
-					*content = { ds::move(*content), content->length() };
-				}
-			}
-			// step 4: get the attributes
-			{
-				for(size_t i = 0; i < size_; ++i)
-				{
-					auto attributes_ = get_reflect_attributes(contents[i]);
-					for(auto & attribute : attributes_)
-						attributes.push(ds::move(attribute));
-				}
-			}
-			// step 4.9: free contents
-			{
-				contents.destroy();
-			}
-			// step 5: generate reflection header files
-			{
-				using path_t      = ds::string<>;
-				using content_t   = ds::string<>;
-				using header_t    = ds::tuple<path_t,content_t>;
-				auto headers = ds::stack<header_t>(attributes.size());
-				ds::string_stream<> object_tuples_sst(512);
-				ds::string_stream<> member_object_tuples_sst(512);
-				auto first_object        = true;
-				auto first_member_object = true;
-				for(auto & attr : attributes)
-				{
-					// generate substitution table
-					auto const & type_id        = attr.at<0>();
-					auto const & namespaces     = attr.at<1>();
-					auto const & object_id      = attr.at<2>();
-					auto const & function_id    = attr.at<3>();
-					auto const & function_args  = attr.at<4>();
-					auto         ns_object_id   = ds::string<>();
-					auto subs                   = substitutions_t(5);
-					auto member_object          = type_id == "struct"_dsstrv || type_id == "class"_dsstrv;
-					// generate header guard namespace substitution
-					{
-						ds::string_stream<> sstream(64);
-						if(namespaces.size() > 0)
-						{
-							auto _ = ds::memorize(ds::stream_separator, "_");
-							sstream << namespaces;
-						}
-						subs.push(substitution_t("HEADER_GUARD_NS", to_upper(sstream.view())));
-					}
-					// generate header guard substitution
-					{
-						subs.push(substitution_t("HEADER_GUARD_SUFFIX", to_upper(object_id)));
-					}
-					// generate full namespace and type id
-					{
-						ds::string_stream<> sstream(64);
-						if(namespaces.size() > 0)
-						{
-							auto _ = ds::memorize(ds::stream_separator, "::");
-							sstream << "::" << namespaces << "::" << object_id;
-						}
-						else
-							sstream << "::" << object_id;
-						ns_object_id = sstream.view();
-						subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
-					}
-					// generate member/object definition tuples
-					{
-						if(member_object)
-						{
-							if(function_id == "ref"_dsstrv)
-							{
-								ds::string_stream<> sstream(512);
-								bool first = true;
-								for(auto const & arg : function_args)
-								{
-									if(!first)
-									{
-										sstream << "\n\t\t\t, ";
-									}
-									else
-									{
-										sstream << "  ";
-										first = false;
-									}
-									sstream << "make_tuple(\"" << ns_object_id << "\"_dsstrv";
-									sstream << ", \"" << arg << "\"_dsstrv";
-									sstream << ", \"" << type_id << "\"_dsstrv";
-									sstream << ", &" << ns_object_id << "::" << arg << ")";
-								}
-								subs.push(substitution_t("MEMBER_DEF_TUPLES", sstream.view()));
-							}
-						}
-						else
-						{
-							if(function_id == "ref"_dsstrv)
-							{
-								ds::string_stream<> sstream(512);
-								sstream << "make_tuple(\"" << ns_object_id << "\"_dsstrv";
-								sstream << ", \"" << type_id << "\"_dsstrv";
-								sstream << ", ds::ref(" << ns_object_id << "))";
-								subs.push(substitution_t("DEF_TUPLE", sstream.view()));
-							}
-						}
-					}
-					// substitute to template string
-					{
-						auto generated = member_object 
-								? substitute_string(member_object_template, subs)
-								: substitute_string(object_template, subs);
-						auto header_path = ds::string<>();
-						// generate relative header path
-						{
-							ds::string_stream<> sstream(64);
-							if(namespaces.size() > 0)
-							{
-								auto _ = ds::memorize(ds::stream_separator, "/");
-								sstream << namespaces << "/" << object_id;
-							}
-							else
-								sstream << object_id;
-							header_path = sstream.view();
-						}
-						headers.push(header_t(ds::move(header_path), ds::move(generated)));
-					}
-					// generate object and member_object tuples for header all
-					{
-						if(member_object)
-						{
-							if(first_member_object)
-							{
-								first_member_object = false;
-								member_object_tuples_sst << "  ";
-							}
-							else
-								member_object_tuples_sst << "\n\t\t, ";
-							member_object_tuples_sst << "ds::clone(reflect::member_object_t<" << ns_object_id << ">::tuple)";
-						}
-						else 
-						{
-							if(first_object)
-							{
-								first_object = false;
-								object_tuples_sst << "  ";
-							}
-							else
-								object_tuples_sst << "\n\t\t, ";
-							object_tuples_sst << "ds::clone(reflect::object_t<decltype(" << ns_object_id << "),&";
-							object_tuples_sst << ns_object_id << ">::tuple)";
-						}
-					}
-				}
-				// step 5.7: save reflection header files
-				{
-					auto headers_size        = headers.size();
-					auto all_reflections_sst = ds::string_stream<>(256);
-					for(size_t i = 0; i < headers_size; ++i)
-					{
-						auto & header = headers[i];
-						auto header_path = ds::string<>(gen_path, header.at<0>());
-						// validate or make header dir
-						{
-							auto pindex = size_t(0);
-							for(size_t i = header_path.size() - 1; ; --i)
-							{
-								char ch = header_path[i];
-								if(ch == '/' || ch == '\\')
-								{
-									pindex = i;
-									break;
-								}
-								if(i == 0)
-									break;
-							}
-							auto header_dir = header_path.view(0, pindex);
-							auto type = ds::sys::get_type(header_dir);
-							if(type == ds::sys::type::unavailable)
-							{
-								auto ret = ds::sys::mkdirs(header_dir);
-								if(ret != ds::sys::smkdir::ok)
-								{
-									sst << "ERROR: failed to make output sub-directory '" << header_dir << "'!" << endl_error;
-									return -1;
-								}
-							}
-							else if(type != ds::sys::type::dir)
-							{
-								sst << "ERROR: output sub-directory '" << header_dir << "' is not a directory!" << endl_error;
-								return -1;
-							}
-						}
-						ds::file ofile(header_path.begin(), "w");
-						if(!ofile)
-						{
-							sst << "ERROR: failed to open output file '" << header_path << "' for writing!" << endl_error;
-							return -1;
-						}
-						all_reflections_sst << "#include \"" << header.at<0>() << "\"" << "\n";
-						auto const & header_content = header.at<1>();
-						ofile.write(header_content.begin(), header_content.size());
-					}
-					// generate all including header
-					{
-						auto all_reflections_subs = substitutions_t({
-							  substitution_t("HEADER_INCLUSIONS", all_reflections_sst.view())
-							, substitution_t("OBJECT_TUPLES", object_tuples_sst.view())
-							, substitution_t("MEMBER_OBJECT_TUPLES", member_object_tuples_sst.view())
-						});
-						auto all_reflections_content = substitute_string(all_reflections_template, all_reflections_subs);
-						auto all_header_path = ds::string<>(gen_path, "all");
-						ds::file ofile(all_header_path.begin(), "w");
-						if(!ofile)
-						{
-							sst << "ERROR: failed to open output file '" << all_header_path << "' for writing!" << endl_error;
-							return -1;
-						}
-						ofile.write(all_reflections_content.begin(), all_reflections_content.size());
-					}
-				}
-			}
-		}
-		else 
-		{
-			using reflect::version;
-			sst << "reflect v" << version.major << '.' << version.minor << '.' << version.patch << "\n";
-			sst << "usage: reflect <src_0> [src_1]...\n";
-			sst << "default output path is './gen/reflections/'\n";
-			sst << ds::flush;
 		}
 	}
-	ds_catch_block(ds::exception const & ex, {
-		sst << "-- exception -- " << ex.what() << endl_error;
-		return -1;
-	})
-	ds_catch_block(..., {
-		sst << "-- unhandled exception --" << endl_error;
-		return -1;
-	})
+	return true;
 }
 
-using path_t      = ds::string<>;
-using content_t   = ds::string<>;
-using header_t    = ds::tuple<path_t,content_t>;
-
-static ds::stack<header_t>
-gen_reflection(ds::stack<ds::string<>> const & contents)
+ds::stack<header_t>
+generate(ds::stack<ds::string<>> const & contents)
 {
 	auto size_       = contents.size();
 	auto attributes  = attributes_t();
@@ -605,6 +371,8 @@ gen_reflection(ds::stack<ds::string<>> const & contents)
 	return {};
 }
 
+} // namespace reflector
+
 static bool
 is_id(char ch)
 {
@@ -717,7 +485,7 @@ get_reflect_attributes(ds::string_view const & content)
 						}
 						else if(fch == ']')
 						{
-							sst << "WARNING: bad attribute at " << j << " -- '" << content.view(i, j) << "'" << endl_error;
+							// sst << "WARNING: bad attribute at " << j << " -- '" << content.view(i, j) << "'" << endl_error;
 							return {};
 						}
 					}
