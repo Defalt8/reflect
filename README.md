@@ -1,4 +1,4 @@
-# reflect v0.7.11
+# reflect v0.8.12
 
 C++ reflection using code generation.
 
@@ -22,22 +22,21 @@ struct [[reflect::ref(x, y)]] vec2i
 
 ```c++
 #include <ds/all>
-#include "dm/vec2i"
-#include "dm/vec3f" // include reflected definitions before reflection
+#include "vec2i" // include reflected definitions before reflection
 #include <reflections/all>
 
 ds::string_stream<> sst(1024);
 
 int main()
 {
-	dm::vec2i vec {1,2};
-	auto & vec2i_tuple = reflect::member_object_t<dm::vec2i>::tuple;
+	vec2i vec {1,2};
+	auto & vec2i_tuple = reflect::member_object_t<vec2i>::tuple;
 	{ 
-		auto & stup = vec2i_tuple.at<0>(); // reflection info of ::dm::vec2i::x
+		auto & stup = vec2i_tuple.at<0>(); // reflection info of ::vec2i::x
 		sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; 
 	}
 	{ 
-		auto & stup = vec2i_tuple.at<1>(); // reflection info of ::dm::vec2i::y
+		auto & stup = vec2i_tuple.at<1>(); // reflection info of ::vec2i::y
 		sst << stup.at<0>() << " " << stup.at<1>() << " " << vec.*stup.at<2>() << ds::endl; 
 	}
 }
@@ -45,6 +44,6 @@ int main()
 
 output
 ```
-::dm::vec2i x 1
-::dm::vec2i y 2
+::vec2i x 1
+::vec2i y 2
 ```

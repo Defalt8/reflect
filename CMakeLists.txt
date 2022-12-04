@@ -1,5 +1,5 @@
 cmake_minimum_required( VERSION 3.4 )
-project( Reflect VERSION 0.7.11 LANGUAGES CXX )
+project( Reflect VERSION 0.8.12 LANGUAGES CXX )
 
 
 add_executable( reflect src/reflect.cpp )

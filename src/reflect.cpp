@@ -197,8 +197,11 @@ int main(int argc, char * argv[])
 					// generate header guard namespace substitution
 					{
 						ds::string_stream<> sstream(64);
-						auto _ = ds::memorize(ds::stream_separator, "_");
-						sstream << namespaces;
+						if(namespaces.size() > 0)
+						{
+							auto _ = ds::memorize(ds::stream_separator, "_");
+							sstream << namespaces;
+						}
 						member_object_subs.push(substitution_t("HEADER_GUARD_NS", to_upper(sstream.view())));
 					}
 					// generate header guard substitution
@@ -208,8 +211,13 @@ int main(int argc, char * argv[])
 					// generate full namespace and type id
 					{
 						ds::string_stream<> sstream(64);
-						auto _ = ds::memorize(ds::stream_separator, "::");
-						sstream << "::" << namespaces << "::" << object_id;
+						if(namespaces.size() > 0)
+						{
+							auto _ = ds::memorize(ds::stream_separator, "::");
+							sstream << "::" << namespaces << "::" << object_id;
+						}
+						else
+							sstream << "::" << object_id;
 						ns_object_id = sstream.view();
 						member_object_subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
 					}
@@ -244,8 +252,13 @@ int main(int argc, char * argv[])
 						// generate relative header path
 						{
 							ds::string_stream<> sstream(64);
-							auto _ = ds::memorize(ds::stream_separator, "/");
-							sstream << namespaces << "/" << object_id;
+							if(namespaces.size() > 0)
+							{
+								auto _ = ds::memorize(ds::stream_separator, "/");
+								sstream << namespaces << "/" << object_id;
+							}
+							else
+								sstream << object_id;
 							header_path = sstream.view();
 						}
 						headers.push(header_t(ds::move(header_path), ds::move(generated)));
@@ -300,6 +313,7 @@ int main(int argc, char * argv[])
 						auto const & header_content = header.at<1>();
 						ofile.write(header_content.begin(), header_content.size());
 					}
+					// generate all including header
 					{
 						auto all_reflections_subs = substitutions_t({
 							substitution_t("HEADER_INCLUSIONS", all_reflections_sst.view())

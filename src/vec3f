@@ -1,0 +1,17 @@
+#pragma once
+#ifndef VEC3F
+#define VEC3F
+
+
+struct [[reflect::ref(x, y, z)]] vec3f
+{
+	float x, y, z;
+
+	vec3f(float x, float y, float z)
+		: x { x }
+		, y { y }
+		, z { z }
+	{}
+};
+
+#endif // VEC3F
