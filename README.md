@@ -2,7 +2,13 @@
 
 C++ reflection using code generation.
 
-**NOTE:** compiling with `-Wno-attributes` is recommended if supported by the compiler.
+**NOTES:** 
+- Do not use whitespaces in namespace and type ids like so `ds :: fixed<5,int>`
+  - Complex syntax parsing is not done for simplicity sake.
+  - Whitespaces in template arguments is fine. `ds::fixed< 5 \n, int >`
+- The stored type id of array types will be their base type.
+  Use `is_array<remove_cvref_t<...>>` to check if the reference is of an array.
+- Compiling with `-Wno-attributes` or a similar option is recommended if supported by the compiler.
 
 ```c++
 

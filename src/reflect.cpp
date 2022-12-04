@@ -470,92 +470,138 @@ get_reflect_attributes(ds::string_view const & content)
 				auto function_id_index2  = function_id_index; 
 				auto function_args_index = function_id_index; 
 				auto function_args       = function_args_t(8); 
-				// find object_id_index
-				for(size_t j = i - 2, k = 0; ; --j)
+				auto type_id_sst         = ds::string_stream<>(128);
+				auto object_id_sst       = ds::string_stream<>(128);
+				// find type_id_indices
 				{
-					char cch = content[j];
-					if(k == 0)
+					auto template_brace_count = 0;
+					for(size_t j = i - 2, k = 0; ; --j)
 					{
-						if(!isspace(cch))
+						char cch = content[j];
+						if(k == 0)
 						{
-							type_id_index2 = j + 1;
-							k = 1;
+							if(cch == '>')
+							{
+								++template_brace_count;
+								type_id_index2 = j + 1;
+								k = 1;
+								type_id_sst << cch;
+							}
+							else if(!isspace(cch))
+							{
+								type_id_index2 = j + 1;
+								k = 1;
+								type_id_sst << cch;
+							}
+						} 
+						else if(template_brace_count > 0)
+						{
+							for(; j > 0; --j)
+							{
+								char tch = content[j];
+								if(tch == '>')
+									++template_brace_count;
+								else if(tch == '<')
+								{
+									type_id_sst << tch;
+									--template_brace_count;
+									if(template_brace_count <= 0)
+									{
+										for(j = j - 1; j > 0 && isspace(content[j]); --j);
+										type_id_sst << content[j];
+										break;
+									}
+								}
+								else if(isspace(tch))
+									continue;
+								type_id_sst << tch;
+							}
 						}
-					} 
-					else if(!is_id(cch))
-					{
-						type_id_index = j + 1;
-						break;
-					}
-					if(j == 0)
-					{
-						type_id_index = j;
-						break;
+						else if(!(is_id(cch) || cch == ':'))
+						{
+							type_id_index = j + 1;
+							break;
+						}
+						else if(!isspace(cch))
+							type_id_sst << cch;
+						if(j == 0)
+						{
+							type_id_index = j;
+							break;
+						}
 					}
 				}
-				// find function_args_index
-				for(size_t j = i + key.size(); j < size_; ++j)
+				// find function_args_indices
 				{
-					char fch = content[j];
-					if(fch == '(')
+					for(size_t j = i + key.size(); j < size_; ++j)
 					{
-						function_id_index2  = j;
-						function_args_index = j + 1;
-						break;
-					}
-					else if(fch == ']')
-					{
-						sst << "WARNING: bad attribute at " << j << " -- '" << content.view(i, j) << "'" << endl_error;
-						return {};
+						char fch = content[j];
+						if(fch == '(')
+						{
+							function_id_index2  = j;
+							function_args_index = j + 1;
+							break;
+						}
+						else if(fch == ']')
+						{
+							sst << "WARNING: bad attribute at " << j << " -- '" << content.view(i, j) << "'" << endl_error;
+							return {};
+						}
 					}
 				}
 				// find attribute_end_index
-				for(size_t j = function_args_index; j < content_size_; ++j)
 				{
-					char ach = content[j];
-					if(ach == ',' || ach == ')')
+					for(size_t j = function_args_index; j < content_size_; ++j)
 					{
-						function_args.push(trim_space(content.view(function_args_index, j - function_args_index)));
-						function_args_index = j + 1;
-					}
-					else if(ach == ']' && content.view(j, end_key.size()) == end_key)
-					{
-						// find object id indices
+						char ach = content[j];
+						if(ach == ',' || ach == ')')
 						{
-							for(size_t k = j + end_key.size(), l = 0, content_size_1 = content_size_ - 1; ; ++k)
+							function_args.push(trim_space(content.view(function_args_index, j - function_args_index)));
+							function_args_index = j + 1;
+						}
+						else if(ach == ']' && content.view(j, end_key.size()) == end_key)
+						{
+							// find object id indices
 							{
-								char och = content[k];
-								if(l == 0)
+								for(size_t k = j + end_key.size(), l = 0, content_size_1 = content_size_ - 1; ; ++k)
 								{
-									if(!isspace(och))
+									char och = content[k];
+									if(l == 0)
 									{
-										object_id_index = k;
-										l = 1;
+										if(!isspace(och))
+										{
+											object_id_index = k;
+											object_id_sst << och;
+											l = 1;
+										}
+									}
+									else if(!is_id(och))
+									{
+										object_id_index2 = k;
+										break;
+									}
+									else if(!isspace(och))
+										object_id_sst << och;
+									if(k == content_size_1)
+									{
+										object_id_index2 = k + 1;
+										break;
 									}
 								}
-								else if(!is_id(och))
-								{
-									object_id_index2 = k;
-									break;
-								}
-								if(k == content_size_1)
-								{
-									object_id_index2 = k + 1;
-									break;
-								}
 							}
+							type_id_t      type_id     = type_id_sst.view();
+							type_id_t      object_id   = object_id_sst.view();
+							function_id_t  function_id = trim_space(content.view(function_id_index, (function_id_index2 - function_id_index)));
+							ds::reverse(type_id);
+							attribute.at<0>() = ds::move(type_id);
+							attribute.at<1>() = { namespaces.begin(), namespaces.end() };
+							attribute.at<2>() = ds::move(object_id);
+							attribute.at<3>() = ds::move(function_id);
+							attribute.at<4>() = { ds::move(function_args), function_args.size() };
+							attributes.push(ds::move(attribute));
+							i = j + end_key.size() - 1;
+							break;
 						}
-						type_id_t      type_id     = { &content[type_id_index], &content[type_id_index2] };
-						type_id_t      object_id   = { &content[object_id_index], &content[object_id_index2] };
-						function_id_t  function_id = { &content[function_id_index], &content[function_id_index2] };
-						attribute.at<0>() = ds::move(type_id);
-						attribute.at<1>() = { namespaces.begin(), namespaces.end() };
-						attribute.at<2>() = ds::move(object_id);
-						attribute.at<3>() = ds::move(function_id);
-						attribute.at<4>() = { ds::move(function_args), function_args.size() };
-						attributes.push(ds::move(attribute));
-						i = j + end_key.size() - 1;
-						break;
 					}
 				}
 			}

@@ -8,7 +8,6 @@ ds::string_stream<> sst(1024);
 
 int main()
 {
-	
 	{
 		vec3f vec {1,2,3};
 		auto & tuple_ = reflect::member_object_t<vec3f>::tuple;
