@@ -13,13 +13,15 @@ ds::end_line endl_error(stderr);
 // struct/class [[reflect::ref(member_0, member_1, ...)]] name;
 // type [[reflect::ref()]] name;
 
+using namespace_t     = ds::string<>;
+using namespaces_t    = ds::stack<namespace_t>;
 using type_id_t       = ds::string<>;
 using object_id_t     = ds::string<>;
 using function_id_t   = ds::string<>;
 using function_arg_t  = ds::string<>;
 using function_args_t = ds::stack<function_arg_t>;
-using attribute_t     = ds::tuple<type_id_t,object_id_t,function_id_t,function_args_t>;
-using attributes_t    = ds::stack<ds::tuple<type_id_t,object_id_t,function_id_t,function_args_t>>;
+using attribute_t     = ds::tuple<type_id_t,namespaces_t,object_id_t,function_id_t,function_args_t>;
+using attributes_t    = ds::stack<attribute_t>;
 
 static attributes_t
 get_reflect_attributes(ds::string_view const & content);
@@ -123,8 +125,11 @@ int main()
 					auto attributes = get_reflect_attributes(contents[i]);
 					for(auto & e : attributes)
 					{
-						sst << e.at<0>() << " " << e.at<1>() << " -- ";
-						sst << e.at<2>() << '(' << e.at<3>() << ')' << ds::endl;
+						sst << e.at<0>() << " ";
+						auto _ = ds::memorize(ds::stream_separator, "::");
+						sst << e.at<1>() << "::";
+						sst << e.at<2>() << " -- ";
+						sst << e.at<3>() << '(' << e.at<4>() << ')' << ds::endl;
 					}
 				}
 			}
@@ -159,21 +164,26 @@ is_id(char ch)
 static attributes_t
 get_reflect_attributes(ds::string_view const & content)
 {
-	// ds::stack<ds::string_view> attributes(16);
 	auto attributes = attributes_t(8);
 	// find the positions of the reflect attributes and store them
 	{
-		auto key     = "[[reflect::"_dsstrv;
-		auto end_key = "]]"_dsstrv;
+		auto key           = "[[reflect::"_dsstrv;
+		auto end_key       = "]]"_dsstrv;
+		auto namespace_key = "namespace"_dsstrv;
 		if(content.size() < key.size())
 			return {};
-		attribute_t attribute;
-		auto content_size_ = content.size();
-		auto size_         = content.size() - key.size();
+		auto attribute        = attribute_t();
+		auto namespaces       = namespaces_t(8);
+		auto namespace_blocks = ds::stack<int>(8);
+		auto content_size_    = content.size();
+		auto size_            = content.size() - key.size();
+		auto block            = int(0);
+		auto in_string        = false;
 		for(size_t i = 2; i < size_; ++i)
 		{
 			char ch = content[i];
-			if(ch == '[' && content.view(i, key.size()) == key)
+			if(ch == '[' && (isspace(content[i + key.size()]) || is_id(content[i + key.size()]))
+				&& content.view(i, key.size()) == key)
 			{
 				auto type_id_index       = size_t(i - 2); 
 				auto type_id_index2      = type_id_index; 
@@ -262,13 +272,77 @@ get_reflect_attributes(ds::string_view const & content)
 						type_id_t      object_id   = { &content[object_id_index], &content[object_id_index2] };
 						function_id_t  function_id = { &content[function_id_index], &content[function_id_index2] };
 						attribute.at<0>() = ds::move(type_id);
-						attribute.at<1>() = ds::move(object_id);
-						attribute.at<2>() = ds::move(function_id);
-						attribute.at<3>() = { ds::move(function_args), function_args.size() };
+						attribute.at<1>() = { namespaces.begin(), namespaces.end() };
+						attribute.at<2>() = ds::move(object_id);
+						attribute.at<3>() = ds::move(function_id);
+						attribute.at<4>() = { ds::move(function_args), function_args.size() };
 						attributes.push(ds::move(attribute));
 						i = j + end_key.size();
 						break;
 					}
+				}
+			}
+			else if(ch == 'n' && isspace(content[i + namespace_key.size()])
+				&& content.view(i, namespace_key.size()) == namespace_key)
+			{
+				auto namespace_index  = size_t(i + namespace_key.size() + 1);
+				auto namespace_index2 = namespace_index;
+				auto content_size_1   = size_t(content_size_ - 1);
+				for(size_t j = i + namespace_key.size() + 1, k = 0; ; ++j)
+				{
+					char nch = content[j];
+					if(k == 0 && !isspace(nch))
+					{
+						namespace_index = j;
+						k = 1;
+					}
+					else if(!is_id(nch))
+					{
+						namespace_index2 = j;
+						break;
+					}
+					if(j == content_size_1)
+					{
+						namespace_index2 = j + 1;
+						break;
+					}
+				}
+				auto namespace_id = ds::string<>(&content[namespace_index], &content[namespace_index2]);
+				namespaces.push(ds::move(namespace_id));
+				namespace_blocks.push(block);
+				i = namespace_index2 + 1;
+			}
+			else if(ch == '"')
+			{
+				bool escape = false;
+				for(size_t j = i + 1; j < content_size_; ++j)
+				{
+					if(!escape && ch == '"')
+					{
+						i = j + 1;
+						break;
+					}
+					else if(ch == '\\')
+					{
+						escape = !escape;
+					}
+					else if(escape)
+					{
+						escape = false;
+					}
+				}
+			}
+			else if(ch == '{')
+			{
+				++block;
+			}
+			else if(ch == '}')
+			{
+				--block;
+				if(namespace_blocks.top() == block)
+				{
+					namespaces.pop();
+					namespace_blocks.pop();
 				}
 			}
 		}
