@@ -1,0 +1,14 @@
+#pragma once
+#ifndef DM_VEC2I
+#define DM_VEC2I
+
+namespace dm {
+
+struct [[reflect::ref(x, y)]] vec2i
+{
+	int x, y;
+};
+
+} // namespace dm
+
+#endif // DM_VEC2I

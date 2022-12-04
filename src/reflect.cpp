@@ -22,6 +22,8 @@ using function_arg_t  = ds::string<>;
 using function_args_t = ds::stack<function_arg_t>;
 using attribute_t     = ds::tuple<type_id_t,namespaces_t,object_id_t,function_id_t,function_args_t>;
 using attributes_t    = ds::stack<attribute_t>;
+using substitution_t  = ds::tuple<ds::string<>,ds::string<>>;
+using substitutions_t = ds::stack<substitution_t>;
 
 static attributes_t
 get_reflect_attributes(ds::string_view const & content);
@@ -29,13 +31,63 @@ get_reflect_attributes(ds::string_view const & content);
 static ds::string_view
 trim_space(ds::string_view const & str);
 
+static ds::stack<ds::string<>>
+split_string(ds::string_view const & str, ds::string_view const & delim, size_t min_size = 0);
 
-int main(int argc, char * argv[])
-// int main()
+static ds::string<>
+substitute_string(ds::string_view const & string, substitutions_t const & subs);
+
+static ds::string<>
+to_upper(ds::string_view const & string)
+{
+	auto string_size = size_t(string.size());
+	if(string_size == 0)
+		return {};
+	auto transformed = ds::string<>(string_size);
+	for(size_t i = 0; i < string_size; ++i)
+	{
+		char ch = string[i];
+		if(ch >= 'a' && ch <= 'z')
+			transformed[i] = char(toupper(ch));
+		else
+			transformed[i] = ch;
+	}
+	return ds::move(transformed);
+}
+
+
+static constexpr ds::string_view member_object_template =
+R"~~(#pragma once
+#ifndef REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+#define REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+
+#include <reflect>
+
+namespace reflect {
+namespace traits {
+	
+	template <>
+	struct member_object<${NS_TYPE_ID}> : public reflect::member_object_traits<${NS_TYPE_ID}> 
+	{
+		static constexpr auto tuple = ds::make_tuple(
+			${MEMBER_DEF_TUPLES}
+		);
+	};
+
+	constexpr decltype(member_object<${NS_TYPE_ID}>::tuple) member_object<${NS_TYPE_ID}>::tuple;
+
+} // namespace traits
+} // namespace reflect
+
+#endif // REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+)~~";
+
+// int main(int argc, char * argv[])
+int main()
 {
 	// sst << WORKING_DIR << ds::endl;
-	// int argc = 3; 
-	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
+	int argc = 3; 
+	char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
 	//------------------------------------------------
 	// get the arguments as the input source files
 	// read the source files into an array of strings
@@ -50,7 +102,8 @@ int main(int argc, char * argv[])
 			auto size_       = size_t(argc - 1);
 			auto input_files = ds::stack<ds::string<>>(size_);
 			auto contents    = ds::stack<ds::string<>>(size_);
-			auto gen_path    = "./gen/reflections"_dsstrv;
+			auto gen_path    = "./gen/reflections/"_dsstrv;
+			auto attributes  = attributes_t();
 			// step 0: validate or create gen_path
 			{
 				auto type = ds::sys::get_type(gen_path);
@@ -121,17 +174,9 @@ int main(int argc, char * argv[])
 			{
 				for(size_t i = 0; i < size_; ++i)
 				{
-					auto attributes = get_reflect_attributes(contents[i]);
-					for(auto & e : attributes)
-					{
-						sst << e.at<0>() << " ";
-						{
-							auto _ = ds::memorize(ds::stream_separator, "::");
-							sst << e.at<1>() << "::";
-						}
-						sst << e.at<2>() << " -- ";
-						sst << e.at<3>() << '(' << e.at<4>() << ')' << ds::endl;
-					}
+					auto attributes_ = get_reflect_attributes(contents[i]);
+					for(auto & attribute : attributes_)
+						attributes.push(ds::move(attribute));
 				}
 			}
 			// step 4.9: free contents
@@ -140,16 +185,133 @@ int main(int argc, char * argv[])
 			}
 			// step 5: generate reflection header files
 			{
+				using path_t      = ds::string<>;
+				using content_t   = ds::string<>;
+				using header_t    = ds::tuple<path_t,content_t>;
+				auto headers = ds::stack<header_t>(attributes.size());
+				for(auto & attr : attributes)
+				{
+					// generate substitution table
+					auto member_object_subs = substitutions_t(5);
+					auto const & type_id        = attr.at<0>();
+					auto const & namespaces     = attr.at<1>();
+					auto const & object_id      = attr.at<2>();
+					auto const & function_id    = attr.at<3>();
+					auto const & function_args  = attr.at<4>();
+					auto         ns_object_id   = ds::string<>();
+					// generate header guard namespace substitution
+					{
+						ds::string_stream<> sstream(64);
+						auto _ = ds::memorize(ds::stream_separator, "_");
+						sstream << namespaces;
+						member_object_subs.push(substitution_t("HEADER_GUARD_NS", to_upper(sstream.view())));
+					}
+					// generate header guard substitution
+					{
+						member_object_subs.push(substitution_t("HEADER_GUARD_SUFFIX", to_upper(object_id)));
+					}
+					// generate full namespace and type id
+					{
+						ds::string_stream<> sstream(64);
+						auto _ = ds::memorize(ds::stream_separator, "::");
+						sstream << "::" << namespaces << "::" << object_id;
+						ns_object_id = sstream.view();
+						member_object_subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
+					}
+					// generate member definition tuples
+					{
+						if(function_id == "ref"_dsstrv)
+						{
+							ds::string_stream<> sstream(512);
+							bool first = true;
+							for(auto const & arg : function_args)
+							{
+								if(!first)
+								{
+									sstream << "\n\t\t\t, ";
+								}
+								else
+								{
+									sstream << "  ";
+									first = false;
+								}
+								sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
+								sstream << ", \"" << arg << "\"_dsstrv";
+								sstream << ", &" << ns_object_id << "::" << arg << ")";
+							}
+							member_object_subs.push(substitution_t("MEMBER_DEF_TUPLES", sstream.view()));
+						}
+					}
+					// substitute to template string
+					{
+						auto generated = substitute_string(member_object_template, member_object_subs);
+						auto header_path = ds::string<>();
+						// generate relative header path
+						{
+							ds::string_stream<> sstream(64);
+							auto _ = ds::memorize(ds::stream_separator, "/");
+							sstream << namespaces << "/" << object_id;
+							header_path = sstream.view();
+						}
+						headers.push(header_t(ds::move(header_path), ds::move(generated)));
+					}
+				}
+				// step 5.7: save reflection header files
+				{
+					auto headers_size = headers.size();
+					for(size_t i = 0; i < headers_size; ++i)
+					{
+						auto & header = headers[i];
+						auto header_path = ds::string<>(gen_path, header.at<0>());
+						// validate or make header dir
+						{
+							auto pindex = 0;
+							for(size_t i = header_path.size() - 1; ; --i)
+							{
+								char ch = header_path[i];
+								if(ch == '/' || ch == '\\')
+								{
+									pindex = i;
+									break;
+								}
+								if(i == 0)
+									break;
+							}
+							auto header_dir = header_path.view(0, pindex);
+							auto type = ds::sys::get_type(header_dir);
+							if(type == ds::sys::type::unavailable)
+							{
+								auto ret = ds::sys::mkdir(header_dir);
+								if(ret != ds::sys::smkdir::ok)
+								{
+									sst << "ERROR: failed to make output sub-directory '" << header_dir << "'!" << endl_error;
+									return -1;
+								}
+							}
+							else if(type != ds::sys::type::dir)
+							{
+								sst << "ERROR: output sub-directory '" << header_dir << "' is not a directory!" << endl_error;
+								return -1;
+							}
+						}
+						ds::file ofile(header_path.begin(), "w");
+						if(!ofile)
+						{
+							sst << "ERROR: failed to open output file '" << header_path << "' for writing!" << endl_error;
+							return -1;
+						}
+						auto const & header_content = header.at<1>();
+						ofile.write(header_content.begin(), header_content.size());
+					}
+				}
 			}
-			// step 6: save reflection header files
-			{}
 		}
 		else 
 		{
 			using reflect::version;
 			sst << "reflect v" << version.major << '.' << version.minor << '.' << version.patch << "\n";
 			sst << "usage: reflect <src_0> [src_1]...\n";
-			sst << "default output path is './gen/reflections'\n";
+			sst << "default output path is './gen/reflections/'\n";
 			sst << ds::flush;
 		}
 	}
@@ -392,7 +554,6 @@ get_reflect_attributes(ds::string_view const & content)
 	return { ds::move(attributes), attributes.size() };
 }
 
-
 static ds::string_view
 trim_space(ds::string_view const & str)
 {
@@ -407,4 +568,110 @@ trim_space(ds::string_view const & str)
 		if(!isspace(str[j]))
 			break;
 	return str.view(i, j - i + 1);
+}
+
+substitution_t const * 
+find_match(ds::string_view const & string, size_t index, substitutions_t const & subs)
+{
+	auto string_size = string.size();
+	auto subs_size   = subs.size();
+	if(index < string_size && subs_size > 0)
+	{
+		auto av_size = size_t(string_size - index);
+		char ch = string[index];
+		for(size_t i = 0; i < subs_size; ++i)
+		{
+			auto const & sub_key = subs[i].at<0>();
+			auto sub_key_size = sub_key.size();
+			if(sub_key_size <= av_size && ch == sub_key[0] 
+				&& string.view(index, sub_key_size) == sub_key)
+			{
+				return &subs[i];
+			}
+		}
+	}
+	return nullptr;
+}
+
+static ds::stack<ds::string<>>
+split_string(ds::string_view const & str, ds::string_view const & delim, size_t min_size)
+{
+	if(str.size() == 0 || delim.size() == 0)
+		return {};
+	auto split_      = ds::stack<ds::string<>>();
+	auto string_size = size_t(str.size());
+	auto delim_ch    = delim[0];
+	for(size_t i = 0, j = 0; ; ++i)
+	{
+		char ch = str[i];
+		if(ch == delim_ch && str.view(i, delim.size()) == delim)
+		{
+			if(i >= j + min_size)
+			{
+				auto substr = ds::string<>(&str[j], &str[i]);
+				split_.push(ds::move(substr));
+			}
+			i += delim.size();
+			j = i;
+			--i;
+		}
+		else if(i == string_size)
+		{
+			if(i >= j + min_size)
+			{
+				auto substr = ds::string<>(&str[j], &str[i]);
+				split_.push(ds::move(substr));
+			}
+			break;
+		}
+	}
+	return ds::move(split_);
+}
+
+static ds::string<>
+substitute_string(ds::string_view const & string, substitutions_t const & subs)
+{
+	ds::string_stream<> sub_stream(string.size() * 2);
+	auto var_token    = "${"_dsstrv;
+	auto var_delim    = "}"_dsstrv;
+	auto string_size  = string.size();
+	auto last_sub_i   = size_t(0);
+	for(size_t i = 0, j = 0, k = 0; i < string_size; ++i)
+	{
+		char ch = string[i];
+		if(k == 1)
+		{
+			if(ch == var_delim[0] && string.view(i, var_delim.size()) == var_delim)
+			{
+				auto var_id = string.view(j, (i - j));
+				// find match and substitute
+				{
+					auto * match = find_match(string, j, subs);
+					if(match != nullptr)
+					{
+						auto const & sub_value = match->at<1>();
+						if(sub_value.size() > 0)
+							sub_stream.write(&sub_value[0], sub_value.size());
+					}
+				}
+				k = 0;
+				i += var_delim.size();
+				last_sub_i = i;
+				--i;
+			}
+		}
+		else if(k == 0 && ch == var_token[0] && string.view(i, var_token.size()) == var_token)
+		{
+			if(last_sub_i < i)
+				sub_stream.write(&string[last_sub_i], (i - last_sub_i));
+			k = 1;
+			i += var_token.size();
+			j = i;
+			last_sub_i = i;
+			--i;
+		}
+	}
+	if(last_sub_i < string_size)
+		sub_stream.write(&string[last_sub_i], (string_size - last_sub_i));
+	return sub_stream.view();
 }

@@ -1,0 +1,23 @@
+#pragma once
+#ifndef DM_VEC3F
+#define DM_VEC3F
+
+namespace dm {
+
+
+struct [[reflect::ref(x, y, z)]] vec3f
+{
+	union {
+		float values[3]{};
+		struct { float x, y, z; };
+	};
+
+	vec3f(float x, float y, float z)
+		: values { x, y, z }
+	{}
+};
+
+
+} // namespace dm
+
+#endif // DM_VEC3F
