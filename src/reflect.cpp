@@ -38,23 +38,18 @@ static ds::string<>
 substitute_string(ds::string_view const & string, substitutions_t const & subs);
 
 static ds::string<>
-to_upper(ds::string_view const & string)
-{
-	auto string_size = size_t(string.size());
-	if(string_size == 0)
-		return {};
-	auto transformed = ds::string<>(string_size);
-	for(size_t i = 0; i < string_size; ++i)
-	{
-		char ch = string[i];
-		if(ch >= 'a' && ch <= 'z')
-			transformed[i] = char(toupper(ch));
-		else
-			transformed[i] = ch;
-	}
-	return ds::move(transformed);
-}
+to_upper(ds::string_view const & string);
 
+
+static constexpr ds::string_view all_reflections_template =
+R"~~(#pragma once
+#ifndef REFLECTIONS_ALL
+#define REFLECTIONS_ALL
+
+${HEADER_INCLUSIONS}
+
+#endif // REFLECTIONS_ALL
+)~~";
 
 static constexpr ds::string_view member_object_template =
 R"~~(#pragma once
@@ -82,12 +77,12 @@ namespace traits {
 #endif // REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
 )~~";
 
-// int main(int argc, char * argv[])
-int main()
+int main(int argc, char * argv[])
+// int main()
 {
 	// sst << WORKING_DIR << ds::endl;
-	int argc = 3; 
-	char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
+	// int argc = 3; 
+	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f", WORKING_DIR"include/dm/vec2i" };
 	//------------------------------------------------
 	// get the arguments as the input source files
 	// read the source files into an array of strings
@@ -258,7 +253,8 @@ int main()
 				}
 				// step 5.7: save reflection header files
 				{
-					auto headers_size = headers.size();
+					auto headers_size        = headers.size();
+					auto all_reflections_sst = ds::string_stream<>(256);
 					for(size_t i = 0; i < headers_size; ++i)
 					{
 						auto & header = headers[i];
@@ -300,8 +296,23 @@ int main()
 							sst << "ERROR: failed to open output file '" << header_path << "' for writing!" << endl_error;
 							return -1;
 						}
+						all_reflections_sst << "#include \"" << header.at<0>() << "\"" << "\n";
 						auto const & header_content = header.at<1>();
 						ofile.write(header_content.begin(), header_content.size());
+					}
+					{
+						auto all_reflections_subs = substitutions_t({
+							substitution_t("HEADER_INCLUSIONS", all_reflections_sst.view())
+						});
+						auto all_reflections_content = substitute_string(all_reflections_template, all_reflections_subs);
+						auto all_header_path = ds::string<>(gen_path, "all");
+						ds::file ofile(all_header_path.begin(), "w");
+						if(!ofile)
+						{
+							sst << "ERROR: failed to open output file '" << all_header_path << "' for writing!" << endl_error;
+							return -1;
+						}
+						ofile.write(all_reflections_content.begin(), all_reflections_content.size());
 					}
 				}
 			}
@@ -675,3 +686,22 @@ substitute_string(ds::string_view const & string, substitutions_t const & subs)
 		sub_stream.write(&string[last_sub_i], (string_size - last_sub_i));
 	return sub_stream.view();
 }
+
+static ds::string<>
+to_upper(ds::string_view const & string)
+{
+	auto string_size = size_t(string.size());
+	if(string_size == 0)
+		return {};
+	auto transformed = ds::string<>(string_size);
+	for(size_t i = 0; i < string_size; ++i)
+	{
+		char ch = string[i];
+		if(ch >= 'a' && ch <= 'z')
+			transformed[i] = char(toupper(ch));
+		else
+			transformed[i] = ch;
+	}
+	return ds::move(transformed);
+}
+

@@ -1,8 +1,7 @@
 #include <ds/all>
 #include "dm/vec2i"
 #include "dm/vec3f"
-#include <reflections/dm/vec2i>
-#include <reflections/dm/vec3f>
+#include <reflections/all>
 
 ds::string_stream<> sst(1024);
 

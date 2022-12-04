@@ -15,17 +15,16 @@ struct [[reflect::ref(x, y)]] vec2i
 
 ```sh
 ./reflect header_0 header_1...
-# will generate reflection traits using tuples to ./gen/reflections/*
-# -organized by namespace
+# will generate reflection traits using tuples to ./gen/reflections/* organized by namespace
+# will also generate an all including header
 # currently only public member objects reflection is implemented. 
 ```
 
 ```c++
 #include <ds/all>
 #include "dm/vec2i"
-#include "dm/vec3f"
-#include <reflections/dm/vec2i>
-#include <reflections/dm/vec3f>
+#include "dm/vec3f" // include reflected definitions before reflection
+#include <reflections/all>
 
 ds::string_stream<> sst(1024);
 
