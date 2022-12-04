@@ -1,0 +1,14 @@
+#pragma once
+#ifndef DM_SD_VAR
+#define DM_SD_VAR
+
+namespace dm {
+namespace sd {
+
+static float [[reflect::ref()]] factor = 5.0f;
+
+} // namespace sd
+} // namespace dm
+
+
+#endif // DM_SD_VAR

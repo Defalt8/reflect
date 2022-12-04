@@ -8,7 +8,7 @@ namespace reflect {
 
 static constexpr struct Version { int major, minor, patch; } version { 0, 8, 12 };
 
-template <typename O>
+template <typename O, O *>
 struct object_traits
 {
 	using object_t = O;
@@ -22,11 +22,14 @@ struct member_object_traits
 
 namespace traits {
 
-	template <class O> struct object;
+	template <class O, O *> struct object;
 	// use member_object<C>::tuple
 	template <class C> struct member_object;
 
 } // namespace traits
+
+// use object_t<C,C*>::tuple
+template <class C, C * ptr_> using object_t = traits::object<C,ptr_>;
 
 // use member_object_t<C>::tuple
 template <class C> using member_object_t = traits::member_object<C>;

@@ -51,6 +51,30 @@ ${HEADER_INCLUSIONS}
 #endif // REFLECTIONS_ALL
 )~~";
 
+static constexpr ds::string_view object_template =
+R"~~(#pragma once
+#ifndef REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+#define REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+
+#include <reflect>
+
+namespace reflect {
+namespace traits {
+	
+	template <>
+	struct object<decltype(${NS_TYPE_ID}),&${NS_TYPE_ID}> : public reflect::object_traits<decltype(${NS_TYPE_ID}),&${NS_TYPE_ID}> 
+	{
+		static constexpr auto tuple = ${DEF_TUPLE};
+	};
+
+	constexpr decltype(object<decltype(${NS_TYPE_ID}),&${NS_TYPE_ID}>::tuple) object<decltype(${NS_TYPE_ID}),&${NS_TYPE_ID}>::tuple;
+
+} // namespace traits
+} // namespace reflect
+
+#endif // REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
+)~~";
+
 static constexpr ds::string_view member_object_template =
 R"~~(#pragma once
 #ifndef REFLECTIONS_${HEADER_GUARD_NS}_${HEADER_GUARD_SUFFIX}
@@ -150,19 +174,13 @@ int main(int argc, char * argv[])
 						sst << "ERROR: failed to open input file '" << input_file << "'!" << endl_error;
 						return -1;
 					}
-					auto & content = contents[i];
-					content = { size_t(ifile.size()) };
-					if(content.size() != ifile.size())
+					auto * content = contents.push(ds::string<>(size_t(ifile.size())));
+					if(content == nullptr || content->size() != ifile.size())
 					{
 						sst << "ERROR: allocation failure!" << endl_error;
 						return -1;
 					}
-					size_t read_ = ifile.read(content.begin(), content.size());
-					if(read_ != content.size())
-					{
-						sst << "ERROR: file read failure!" << endl_error;
-						return -1;
-					}
+					ifile.read(content->begin(), content->size());
 				}
 			}
 			// step 4: get the attributes
@@ -187,13 +205,14 @@ int main(int argc, char * argv[])
 				for(auto & attr : attributes)
 				{
 					// generate substitution table
-					auto member_object_subs = substitutions_t(5);
 					auto const & type_id        = attr.at<0>();
 					auto const & namespaces     = attr.at<1>();
 					auto const & object_id      = attr.at<2>();
 					auto const & function_id    = attr.at<3>();
 					auto const & function_args  = attr.at<4>();
 					auto         ns_object_id   = ds::string<>();
+					auto subs                   = substitutions_t(5);
+					auto member_object          = type_id == "struct"_dsstrv || type_id == "class"_dsstrv;
 					// generate header guard namespace substitution
 					{
 						ds::string_stream<> sstream(64);
@@ -202,11 +221,11 @@ int main(int argc, char * argv[])
 							auto _ = ds::memorize(ds::stream_separator, "_");
 							sstream << namespaces;
 						}
-						member_object_subs.push(substitution_t("HEADER_GUARD_NS", to_upper(sstream.view())));
+						subs.push(substitution_t("HEADER_GUARD_NS", to_upper(sstream.view())));
 					}
 					// generate header guard substitution
 					{
-						member_object_subs.push(substitution_t("HEADER_GUARD_SUFFIX", to_upper(object_id)));
+						subs.push(substitution_t("HEADER_GUARD_SUFFIX", to_upper(object_id)));
 					}
 					// generate full namespace and type id
 					{
@@ -219,35 +238,50 @@ int main(int argc, char * argv[])
 						else
 							sstream << "::" << object_id;
 						ns_object_id = sstream.view();
-						member_object_subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
+						subs.push(substitution_t("NS_TYPE_ID", ns_object_id));
 					}
 					// generate member definition tuples
 					{
-						if(function_id == "ref"_dsstrv)
+						if(member_object)
 						{
-							ds::string_stream<> sstream(512);
-							bool first = true;
-							for(auto const & arg : function_args)
+							if(function_id == "ref"_dsstrv)
 							{
-								if(!first)
+								ds::string_stream<> sstream(512);
+								bool first = true;
+								for(auto const & arg : function_args)
 								{
-									sstream << "\n\t\t\t, ";
+									if(!first)
+									{
+										sstream << "\n\t\t\t, ";
+									}
+									else
+									{
+										sstream << "  ";
+										first = false;
+									}
+									sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
+									sstream << ", \"" << arg << "\"_dsstrv";
+									sstream << ", &" << ns_object_id << "::" << arg << ")";
 								}
-								else
-								{
-									sstream << "  ";
-									first = false;
-								}
-								sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
-								sstream << ", \"" << arg << "\"_dsstrv";
-								sstream << ", &" << ns_object_id << "::" << arg << ")";
+								subs.push(substitution_t("MEMBER_DEF_TUPLES", sstream.view()));
 							}
-							member_object_subs.push(substitution_t("MEMBER_DEF_TUPLES", sstream.view()));
+						}
+						else
+						{
+							if(function_id == "ref"_dsstrv)
+							{
+								ds::string_stream<> sstream(512);
+								sstream << "ds::make_tuple(\"" << ns_object_id << "\"_dsstrv";
+								sstream << ", ds::ref(" << ns_object_id << "))";
+								subs.push(substitution_t("DEF_TUPLE", sstream.view()));
+							}
 						}
 					}
 					// substitute to template string
 					{
-						auto generated = substitute_string(member_object_template, member_object_subs);
+						auto generated = member_object 
+								? substitute_string(member_object_template, subs)
+								: substitute_string(object_template, subs);
 						auto header_path = ds::string<>();
 						// generate relative header path
 						{
@@ -274,7 +308,7 @@ int main(int argc, char * argv[])
 						auto header_path = ds::string<>(gen_path, header.at<0>());
 						// validate or make header dir
 						{
-							auto pindex = 0;
+							auto pindex = size_t(0);
 							for(size_t i = header_path.size() - 1; ; --i)
 							{
 								char ch = header_path[i];
