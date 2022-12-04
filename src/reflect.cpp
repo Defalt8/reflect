@@ -30,12 +30,12 @@ static ds::string_view
 trim_space(ds::string_view const & str);
 
 
-// int main(int argc, char * argv[])
-int main()
+int main(int argc, char * argv[])
+// int main()
 {
 	// sst << WORKING_DIR << ds::endl;
-	int argc = 2; 
-	char const * argv[] = { "", WORKING_DIR"include/dm/vec3f" };
+	// int argc = 2; 
+	// char const * argv[] = { "", WORKING_DIR"include/dm/vec3f" };
 	//------------------------------------------------
 	// get the arguments as the input source files
 	// read the source files into an array of strings
@@ -126,8 +126,10 @@ int main()
 					for(auto & e : attributes)
 					{
 						sst << e.at<0>() << " ";
-						auto _ = ds::memorize(ds::stream_separator, "::");
-						sst << e.at<1>() << "::";
+						{
+							auto _ = ds::memorize(ds::stream_separator, "::");
+							sst << e.at<1>() << "::";
+						}
 						sst << e.at<2>() << " -- ";
 						sst << e.at<3>() << '(' << e.at<4>() << ')' << ds::endl;
 					}
@@ -277,7 +279,7 @@ get_reflect_attributes(ds::string_view const & content)
 						attribute.at<3>() = ds::move(function_id);
 						attribute.at<4>() = { ds::move(function_args), function_args.size() };
 						attributes.push(ds::move(attribute));
-						i = j + end_key.size();
+						i = j + end_key.size() - 1;
 						break;
 					}
 				}
@@ -310,25 +312,58 @@ get_reflect_attributes(ds::string_view const & content)
 				auto namespace_id = ds::string<>(&content[namespace_index], &content[namespace_index2]);
 				namespaces.push(ds::move(namespace_id));
 				namespace_blocks.push(block);
-				i = namespace_index2 + 1;
+				i = namespace_index2;
 			}
 			else if(ch == '"')
 			{
 				bool escape = false;
-				for(size_t j = i + 1; j < content_size_; ++j)
+				bool raw    = content[i - 1] == 'R';
+				if(raw)
 				{
-					if(!escape && ch == '"')
+					auto delim_index  = i;
+					auto delim_index2 = delim_index;
+					auto delim        = ds::string<>();
+					for(size_t j = i + 1, k = 0; j < content_size_; ++j)
 					{
-						i = j + 1;
-						break;
+						char sch = content[j];
+						if(k == 1)
+						{
+							if(sch == ')' && content.view(j, delim.size()) == delim)
+							{
+								i = j + delim.size() - 1;
+								break;
+							}
+						}
+						else if(k == 0)
+						{
+							if(sch == '(')
+							{
+								delim_index2 = j + 1;
+								delim        = ds::string<>(&content[delim_index], &content[delim_index2]);
+								ds::reverse(delim);
+								delim[0] = ')';
+								k = 1;
+							}
+						}
 					}
-					else if(ch == '\\')
+				}
+				else
+				{
+					for(size_t j = i + 1; j < content_size_; ++j)
 					{
-						escape = !escape;
-					}
-					else if(escape)
-					{
-						escape = false;
+						if(!escape && ch == '"')
+						{
+							i = j;
+							break;
+						}
+						else if(ch == '\\')
+						{
+							escape = !escape;
+						}
+						else if(escape)
+						{
+							escape = false;
+						}
 					}
 				}
 			}
